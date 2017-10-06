@@ -1,0 +1,122 @@
+# This example config file uses a number of the custom modules available in galsim_extra including
+#     FocalPlane output type
+#     MixedScene stamp type
+#     CosmosR50, CosmosFlux value types along with cosmos_sampler input type
+#     LogNormal value type
+#     OffChip value type
+modules:
+    - galsim_extra
+
+eval_variables:
+        srun: &run "001"
+        sccdname: { type: ThisFileTag, index: '$chip_num', index_key: 'image_num' }
+        simage_path: { type: ThisFileName, index: '$chip_num' }
+
+input:
+    all_files:  
+        index_key: exp_num
+        dir: /global/cscratch1/sd/maccrann/DES/meds/y3v02/DES0544-2249/sources-r/OPS/finalcut/Y2A1/Y2-2277/20141130/D00383286/p01/red/immask
+        files: D00383286_r_c??_r2277p01_immasked.fits.fz
+        #dir: { type: Catalog, num: 0, col: 0}
+        #files: { type: Catalog, num: 0, col: 1}
+    power_spectrum:
+        index_key: exp_num
+        # Heymans et al, 2012 found L0 ~= 3 arcmin, given as 180 arcsec here.
+        e_power_function: '(k**2 + (1./180)**2)**(-11./6.)'
+        b_power_function: '@input.power_spectrum.e_power_function'
+        units: arcsec
+        grid_spacing: 10
+        ngrid: '$math.ceil(2*focal_rmax / @input.power_spectrum.grid_spacing)'
+        center: 0,0
+        variance: '$rms_e**2'  # rms_e is given in meta_params
+    catalog:
+        file_name: test.fits
+
+meta_params:
+    # This field has information *about* the PSF (or the exposure in general), which will be used
+    # by the psf field to generate the specific PSFs at the location of each galaxy.
+    # This is a custom field for use with the FocalPlane output type.
+    # Variable names here are arbitrary, and will be evaluated once at the start of each
+    # focal plane.  The values can be used by the psf field in eval statements.
+    fwhm_central: { type: LogNormal, mean: 0.9, sigma: 0.1 }
+    fwhm_a: { type: LogNormal, mean: 0.1, sigma: 0.1 }
+    rms_e: 0.01
+
+image:
+    type: Scattered
+
+    noise:
+        type: Poisson
+
+    # Note: The real distribution of sky levels probably isn't flat.  It's probably bimodal,
+    # depending on whether the moon is up.  But this is probably ok for now.
+    sky_level: { type: Random, min: 5000, max: 15000, index_key: exp_num }
+
+    random_seed: 8675309
+
+    # The number of objects across the full focal plane.
+    nobjects: 50 # '$(@input.catalog).getNObjects()'
+
+    xsize: 2048
+    ysize: 4096
+
+    world_pos:
+        type: RADec
+        ra: 
+            type: Degrees
+            theta:
+                type: Catalog
+                col: ra
+        dec:
+            type: Degrees
+            theta: 
+                type: Catalog
+                col: dec
+
+    wcs:
+        # Go through the exp_list catalog and sequentially use each exposure once.
+        type: Fits
+        file_name: { type: ThisFileName, index: '$chip_num' }
+
+gal:
+    type: Exponential
+    flux : { type : Catalog , col : flux }
+    half_light_radius : { type : Catalog , col : size }
+
+
+stamp:
+    type: Basic
+    skip:
+        type: OffChip
+        min_dist: 100
+
+output:
+    type: FocalPlane
+
+    # The number of exposures to build
+    # Note: the FocalPlane output type adds another available index key, exp_num.  This can
+    # be used as an index_key instead of the usual file_num, image_num, or obj_num.  You can
+    # also access it in eval statements as just exp_num.
+    nexp: 1 #'$(@input.catalog.0).getNObjects()'
+
+    nchips: { type: NFiles }  # The number of chips per exposure
+
+    dir: output
+    file_name:
+        type: FormattedStr
+        format: "sim_%s.fits"
+        items:
+        - { type: Eval, str: "os.path.basename(image_path)" }
+
+#    truth:
+#        file_name :
+#            type: FormattedStr
+#            format: "truth_%s_%02d.fits"
+#            items:
+#            - { type: Catalog, col: 1 }
+#            - "$chip_num + 1"
+#        columns:
+#            num: obj_num
+#            x: "$image_pos.x"
+#            y: "$image_pos.y"
+#            flux: gal.flux
