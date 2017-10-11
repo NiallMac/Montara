@@ -12,6 +12,10 @@ source_path_file="/global/cscratch1/sd/maccrann/DES/meds/y3v02/DES0544-2249/list
 
 config = galsim.config.ReadConfig(config_file, "yaml", logger)[0]
 
+#set the output directory to somewhere in scratch as I keep filling up home...
+output_dir = "/global/cscratch1/sd/maccrann/DES/image_sims/output"
+config['output']['dir'] = output_dir
+
 #with open(config_file, 'rb') as f:
 #    config=yaml.load(f)
 with open(source_path_file,'r') as f:
@@ -19,8 +23,6 @@ with open(source_path_file,'r') as f:
     input_exps=[]
     for l in lines:
         input_exps.append((l.strip()).split())
-
-
 
 #call galsim for each exposure, updating the input exposure as we go
 for e in input_exps:

@@ -30,7 +30,7 @@ input:
         center: 0,0
         variance: '$rms_e**2'  # rms_e is given in meta_params
     catalog:
-        file_name: test.fits
+        file_name: DES0544-2249_input_objs.fits
 
 meta_params:
     # This field has information *about* the PSF (or the exposure in general), which will be used
@@ -46,11 +46,12 @@ image:
     type: Scattered
 
     noise:
-        type: Poisson
+        type: Gaussian
+        variance: 1.
 
     # Note: The real distribution of sky levels probably isn't flat.  It's probably bimodal,
     # depending on whether the moon is up.  But this is probably ok for now.
-    sky_level: { type: Random, min: 5000, max: 15000, index_key: exp_num }
+    #sky_level: 1. #{ type: Random, min: 5000, max: 15000, index_key: exp_num }
 
     random_seed: 8675309
 
@@ -77,6 +78,23 @@ image:
         # Go through the exp_list catalog and sequentially use each exposure once.
         type: Fits
         file_name: { type: ThisFileName, index: '$chip_num' }
+
+# The PSF is coherent across the full field of view.
+# The size has a polynomial component where it gets larger near the edges to
+# simulate a defocus kind of optical feature.  There is also an atmospheric
+# part using a Gaussian process power spectrum model for the shape and size.
+psf:
+    type: Moffat
+    beta: 2.5
+    fwhm: '$fwhm_central + fwhm_a * (focal_r/focal_rmax)**2'
+    ellip:
+        type: PowerSpectrumShear
+    magnify:
+        type: PowerSpectrumMagnification
+    gsparams:
+        # Without this, some of the really bright stars appear boxy when I turn down the
+        # noise level.  Probably not necessary, but it doesn't slow things down too much.
+        folding_threshold: 1.e-3
 
 gal:
     type: Exponential
@@ -108,15 +126,16 @@ output:
         items:
         - { type: Eval, str: "os.path.basename(image_path)" }
 
-#    truth:
-#        file_name :
-#            type: FormattedStr
-#            format: "truth_%s_%02d.fits"
-#            items:
-#            - { type: Catalog, col: 1 }
-#            - "$chip_num + 1"
-#        columns:
-#            num: obj_num
-#            x: "$image_pos.x"
-#            y: "$image_pos.y"
-#            flux: gal.flux
+
+    truth:
+        file_name :
+            type: FormattedStr
+            format: "truth_%s"
+            items:
+            - { type: Eval, str: "os.path.basename(image_path)" }
+
+        columns:
+            num: obj_num
+            x: "$image_pos.x"
+            y: "$image_pos.y"
+            flux: gal.flux
